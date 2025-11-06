@@ -1,0 +1,135 @@
+{
+  "meta": {
+    "timestamp": "2025-11-06T17:40:50.910785",
+    "scanned_hosts": 1,
+    "alive_hosts": 0
+  },
+  "hosts": {
+    "10.0.2.2": {
+      "host": "10.0.2.2",
+      "ports": [
+        {
+          "port": 21,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": "220 (vsFTPd 2.3.4)",
+          "banner_raw_b64": "MjIwICh2c0ZUUGQgMi4zLjQp",
+          "ascii_preview": "220 (vsFTPd 2.3.4)",
+          "length": 18,
+          "md5": "b0637a81a0923480ddafeeaa4d088120"
+        },
+        {
+          "port": 25,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": "220 metasploitable.localdomain ESMTP Postfix (Ubuntu)",
+          "banner_raw_b64": "MjIwIG1ldGFzcGxvaXRhYmxlLmxvY2FsZG9tYWluIEVTTVRQIFBvc3RmaXggKFVidW50dSk=",
+          "ascii_preview": "220 metasploitable.localdomain ESMTP Postfix (Ubuntu)",
+          "length": 53,
+          "md5": "71af151a4c720fa08d45e16c8f0527d2"
+        },
+        {
+          "port": 23,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": "��\u0018�� ��#��'",
+          "banner_raw_b64": "77+977+9GO+/ve+/vSDvv73vv70j77+977+9Jw==",
+          "ascii_preview": "............. ......#......'",
+          "length": 28,
+          "md5": "b4e9e9e250015e9ff9847b060c8d6907"
+        },
+        {
+          "port": 512,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": "\u0001Where are you?",
+          "banner_raw_b64": "AVdoZXJlIGFyZSB5b3U/",
+          "ascii_preview": ".Where are you?",
+          "length": 15,
+          "md5": "0ad796047ed97ee5bf3844a62e72ed39"
+        },
+        {
+          "port": 513,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": null
+        },
+        {
+          "port": 514,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": null
+        },
+        {
+          "port": 53,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": null
+        },
+        {
+          "port": 111,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": null
+        },
+        {
+          "port": 139,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": null
+        },
+        {
+          "port": 445,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": null
+        },
+        {
+          "port": 22,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": "SSH-2.0-OpenSSH_4.7p1 Debian-8ubuntu1",
+          "banner_raw_b64": "U1NILTIuMC1PcGVuU1NIXzQuN3AxIERlYmlhbi04dWJ1bnR1MQ==",
+          "ascii_preview": "SSH-2.0-OpenSSH_4.7p1 Debian-8ubuntu1",
+          "length": 37,
+          "md5": "5f0081f234bab31d6bad922361f22e23",
+          "ssh": {
+            "ssh_ident": "SSH-2.0-OpenSSH_4.7p1 Debian-8ubuntu1"
+          }
+        },
+        {
+          "port": 80,
+          "protocol": "tcp",
+          "state": "open",
+          "service": null,
+          "banner": null,
+          "http": {
+            "protocol": "HTTP",
+            "status": 200,
+            "headers": {
+              "Date": "Thu, 06 Nov 2025 18:07:15 GMT",
+              "Server": "Apache/2.2.8 (Ubuntu) DAV/2",
+              "X-Powered-By": "PHP/5.2.4-2ubuntu5.10",
+              "Content-Length": "891",
+              "Content-Type": "text/html"
+            },
+            "title": "Metasploitable2 - Linux",
+            "cookies": {}
+          }
+        }
+      ],
+      "open_count": 12
+    }
+  }
+}
