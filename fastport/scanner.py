@@ -7,7 +7,8 @@ Async scanner engine (discovery -> scan -> probe) with tunable timeouts and conc
 
 import asyncio
 import socket
-from typing import Any, Dict, Iterable, List, Union
+import re
+from typing import Any, Dict, Iterable, List, Union, Tuple
 from .utils import ip_range_from_cidr, parse_ports
 from .probes import full_port_probe  # novo probes.py
 
@@ -17,10 +18,92 @@ try:
 except Exception:
     tqdm = None
 
+
+# ---------------- Service / Version inference helper ----------------
+
+_COMMON_PORT_SERVICE = {
+    21: "ftp",
+    22: "ssh",
+    23: "telnet",
+    25: "smtp",
+    53: "dns",
+    80: "http",
+    110: "pop3",
+    143: "imap",
+    443: "https",
+    3306: "mysql",
+    3389: "rdp",
+    8080: "http-proxy",
+    5900: "vnc",
+    139: "smb",
+    445: "smb",
+}
+
+
+_BANNER_REGEXPS = [
+    ("apache", re.compile(r"apache(?:/|\s)?([0-9]+\.[0-9]+(?:\.[0-9]+)?)?", re.I)),
+    ("nginx", re.compile(r"nginx(?:/|\s)?([0-9]+\.[0-9]+(?:\.[0-9]+)?)?", re.I)),
+    ("openssh", re.compile(r"OpenSSH[_\- ]?([0-9]+\.[0-9]+(?:p[0-9]+)?)", re.I)),
+    ("vsftpd", re.compile(r"vsFTPd(?:/|\s)?([0-9]+\.[0-9]+)?", re.I)),
+    ("postfix", re.compile(r"Postfix", re.I)),
+    ("iis", re.compile(r"microsoft-iis(?:/|\s)?([0-9]+\.[0-9]+)?", re.I)),
+    ("samba", re.compile(r"samba(?:/|\s)?([0-9]+\.[0-9]+)?", re.I)),
+]
+
+
+def _safe_banner_text(banner: Any) -> str:
+    """Safely decode banner (bytes, str, None)."""
+    if not banner:
+        return ""
+    if isinstance(banner, bytes):
+        try:
+            return banner.decode("utf-8", errors="replace")
+        except Exception:
+            return repr(banner)
+    return str(banner)
+
+
+def infer_service_version(port_entry: Dict[str, Any]) -> Tuple[Union[str, None], Union[str, None]]:
+    """Try to infer service/version from banner, HTTP/SSH info or port number."""
+    banner = _safe_banner_text(port_entry.get("banner"))
+    port = port_entry.get("port")
+    proto = port_entry.get("protocol", "tcp")
+
+    # --- explicit metadata ---
+    if port_entry.get("http"):
+        headers = port_entry["http"].get("headers", {})
+        srv = headers.get("Server") or headers.get("server")
+        if srv:
+            m = re.match(r"([\w\-\_]+)(?:/([\d\.]+))?", srv)
+            if m:
+                return m.group(1).lower(), m.group(2)
+
+    if port_entry.get("ssh"):
+        ident = _safe_banner_text(port_entry["ssh"].get("ssh_ident") or banner)
+        m = re.search(r"OpenSSH[_\- ]?([0-9]+\.[0-9]+)", ident, re.I)
+        if m:
+            return "openssh", m.group(1)
+        return "ssh", None
+
+    # --- banner regexes ---
+    for hint, rx in _BANNER_REGEXPS:
+        m = rx.search(banner)
+        if m:
+            return hint, m.group(1) if m.groups() else None
+
+    # --- fallback by port ---
+    if port in _COMMON_PORT_SERVICE:
+        return _COMMON_PORT_SERVICE[port], None
+
+    try:
+        return socket.getservbyport(port, proto), None
+    except Exception:
+        return None, None
+
+
 # ---------------- low-level probes ----------------
 
 async def _tcp_connect(host: str, port: int, timeout: float) -> Dict[str, Any]:
-    """Try TCP connect + small banner read. Returns dict with state/banner."""
     res = {"port": port, "protocol": "tcp", "state": "closed", "service": None, "banner": None}
     try:
         reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
@@ -36,53 +119,39 @@ async def _tcp_connect(host: str, port: int, timeout: float) -> Dict[str, Any]:
                 res["banner"] = data.decode("utf-8", errors="replace").strip()
         except asyncio.TimeoutError:
             pass
-        try:
-            writer.close()
-            await writer.wait_closed()
-        except Exception:
-            pass
+        writer.close()
+        await writer.wait_closed()
     except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
         pass
     return res
 
 
 async def _udp_probe(host: str, port: int, timeout: float) -> Dict[str, Any]:
-    """Best-effort UDP probe."""
     res = {"port": port, "protocol": "udp", "state": "closed", "service": None, "banner": None}
 
     def _send_recv():
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                 s.settimeout(timeout)
-                try:
-                    s.sendto(b"\x00", (host, port))
-                except Exception:
-                    return None, "senderr"
-                try:
-                    data, _ = s.recvfrom(4096)
-                    return data, None
-                except socket.timeout:
-                    return None, "timeout"
-                except Exception:
-                    return None, "err"
+                s.sendto(b"\x00", (host, port))
+                data, _ = s.recvfrom(4096)
+                return data
+        except socket.timeout:
+            return None
         except Exception:
-            return None, "sockerr"
+            return None
 
     loop = asyncio.get_running_loop()
-    data, err = await loop.run_in_executor(None, _send_recv)
+    data = await loop.run_in_executor(None, _send_recv)
     if data:
         res["state"] = "open"
-        try:
-            res["banner"] = data.decode("utf-8", errors="replace").strip()
-        except Exception:
-            res["banner"] = repr(data)
+        res["banner"] = data.decode("utf-8", errors="replace").strip()
     else:
-        res["state"] = "open|filtered" if err == "timeout" else "closed"
+        res["state"] = "open|filtered"
     return res
 
 
 async def probe_port(host: str, port: int, protocol: str = "tcp", timeout: float = 0.8) -> Dict[str, Any]:
-    """Dispatch to protocol-specific probe."""
     proto = protocol.lower()
     if proto == "tcp":
         return await _tcp_connect(host, port, timeout)
@@ -102,22 +171,20 @@ async def discover_hosts(
     protocols: Iterable[str] = ("tcp",),
     batch_hosts: int = 200,
 ) -> Dict[str, Any]:
-    """Quick discovery: probe small set of ports to detect live hosts."""
     if isinstance(targets, str):
         targets = [targets]
-    expanded = expand_targets(list(targets))
+    expanded = ip_range_from_cidr(list(targets))
     probe_ports_list = parse_ports(str(probe_ports)) if not isinstance(probe_ports, (list, tuple)) else list(probe_ports)
-    protocols = [p.lower() for p in protocols] if isinstance(protocols, (list, tuple)) else [str(protocols).lower()]
+    protocols = [p.lower() for p in protocols]
 
     results: Dict[str, Any] = {}
     sem = asyncio.Semaphore(concurrency)
+    use_tqdm = tqdm is not None
+    progress = tqdm(total=len(expanded), desc="Discovery (hosts)", unit="host", dynamic_ncols=True) if use_tqdm else None
 
     async def guarded_probe(h: str, p: int, proto: str):
         async with sem:
             return await probe_port(h, p, proto, timeout=timeout)
-
-    use_tqdm = tqdm is not None
-    progress = tqdm(total=len(expanded), desc="Discovery (hosts)", unit="host", dynamic_ncols=True) if use_tqdm else None
 
     for i in range(0, len(expanded), batch_hosts):
         batch = expanded[i:i + batch_hosts]
@@ -147,13 +214,12 @@ async def scan_open_ports_then_probe(
     timeout: float = 0.8,
     batch_hosts: int = 20,
 ) -> Dict[str, Any]:
-    """Scan ports and enrich open ports with full fingerprinting."""
     if isinstance(hosts_or_discovery, dict):
         host_list = [h for h, v in hosts_or_discovery.items() if v.get("alive")]
     elif isinstance(hosts_or_discovery, list):
         host_list = hosts_or_discovery
     elif isinstance(hosts_or_discovery, str):
-        host_list = expand_targets([hosts_or_discovery])
+        host_list = ip_range_from_cidr([hosts_or_discovery])
     else:
         raise ValueError("hosts_or_discovery must be list, dict or str")
 
@@ -161,9 +227,9 @@ async def scan_open_ports_then_probe(
         return {}
 
     ports_list = list(ports_spec) if isinstance(ports_spec, (list, tuple)) else parse_ports(str(ports_spec))
-    protocols = [p.lower() for p in protocols] if isinstance(protocols, (list, tuple)) else [str(protocols).lower()]
-
+    protocols = [p.lower() for p in protocols]
     results: Dict[str, Any] = {}
+
     sem = asyncio.Semaphore(concurrency)
     use_tqdm = tqdm is not None
     progress_hosts = tqdm(total=len(host_list), desc="Hosts scanned", unit="host", dynamic_ncols=True) if use_tqdm else None
@@ -179,6 +245,14 @@ async def scan_open_ports_then_probe(
                         banner_bytes = base_res.get("banner").encode() if base_res.get("banner") else None
                         full_res = await full_port_probe(h, p, banner=banner_bytes)
                         base_res.update(full_res)
+
+                        # 🔍 infer service + version
+                        svc, ver = infer_service_version(base_res)
+                        if svc and not base_res.get("service"):
+                            base_res["service"] = svc
+                        if ver and not base_res.get("version"):
+                            base_res["version"] = ver
+
                     return base_res
 
             tasks = [asyncio.create_task(guarded(h, p, proto)) for proto in protocols for p in ports_list]
@@ -214,10 +288,10 @@ async def discover_and_scan(
     scan_batch: int = 20,
 ) -> Dict[str, Any]:
     disco = await discover_hosts(targets, probe_ports=probe_ports, protocols=protocols,
-                                concurrency=concurrency, timeout=timeout, batch_hosts=discovery_batch)
+                                 concurrency=concurrency, timeout=timeout, batch_hosts=discovery_batch)
     live = [h for h, v in disco.items() if v.get("alive")]
     if not live:
         return {}
     results = await scan_open_ports_then_probe(live, ports_spec=ports_spec, protocols=protocols,
-                                              concurrency=concurrency, timeout=timeout, batch_hosts=scan_batch)
+                                               concurrency=concurrency, timeout=timeout, batch_hosts=scan_batch)
     return results

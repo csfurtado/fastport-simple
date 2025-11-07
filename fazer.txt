@@ -1,0 +1,61 @@
+
+
+Scope: individual work Use only authorised targets (CIBERIUM lab machines).
+Objective
+
+Build a small orchestration pipeline that automates a basic reconnaissance workflow: quick host discovery (Masscan) → detailed scanning & fingerprinting (Nmap) → basic OSINT collection (theHarvester) → simple aggregation into a single inventory (JSON and CSV). 
+Required deliverables 
+
+    A Git repository containing:
+
+        run_recon.sh (or run_recon.py): orchestration script that runs Masscan, Nmap and theHarvester (or the subset you implemented).
+
+        tools/aggregate.py (or equivalent): script that parses outputs and produces an inventory.json.
+
+        targets.txt (or list of authorised targets used).
+
+        out/ directory with the run outputs (masscan.json, nmap/ XML outputs, harvester outputs, inventory.json, CSV).
+
+
+        Required
+
+            Run Masscan (or skip Masscan and use Nmap directly if preferred) against a single authorised target or small authorised range.
+
+            For discovered hosts/ports run Nmap with service/version detection and save XML (nmap -sC -sV -O -oA).
+
+            Run theHarvester for a provided domain (if available) or run a basic OSINT check (e.g., DNS / subdomain enumeration).
+
+            Implement tools/aggregate.py that:
+
+                parses Nmap XML and Masscan JSON (if present),
+
+                builds inventory.json with at least: host IP → open ports → service/version → hostnames/subdomains (if any),
+
+                exports a CSV summary.
+
+            Produce report.md with screenshot and short analysis.
+        Optional extensions (if you feel with energy)
+
+            Map discovered service versions to known CVEs (local lookup or public API).
+
+            Produce a simple Graphviz .dot file to visualise host ↔ services ↔ subdomains relationships.
+
+            Implement diffs: compare current run with a previous run and list changes.
+
+            Integrate basic rate control and safety flags in the orchestration script.
+         
+
+        Example commands 
+
+            Masscan quick discovery (example):
+             
+            sudo masscan -iL targets.txt -p1-65535 --rate 500 -oJ out/masscan.json
+
+            Nmap detailed scan (example):
+             
+            nmap -sC -sV -O -p- -oA out/nmap/192.168.56.101 192.168.56.101
+
+            theHarvester (example):
+             
+            theHarvester -d example.lab -b all -f out/harvester/example_lab.html
+
