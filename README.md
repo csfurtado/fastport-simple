@@ -1,3 +1,7 @@
+# fastport-simple
+
+The simplified version of the fastport-project (port scanner)
+
 # FastPort — Fast Asynchronous Port and Service Scanner
 
 FastPort is a high-performance network scanning tool built in **Python 3.10+**, designed for asynchronous port and service enumeration. It leverages `asyncio` and `aiohttp` for parallel scanning and produces structured reports in **JSON**, **CSV**, and **PDF** formats. A web-based interface is included for interactive visualization.
@@ -133,5 +137,3 @@ Pull requests are welcome. Please refer to roadmap.md for planned features and o
 ## License
 
 This project is licensed under the terms of the MIT License.
-
-
