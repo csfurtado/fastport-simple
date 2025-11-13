@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Scan Report</title>
+  <style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f4f8fc;
+    color: #333;
+    margin: 0;
+    padding: 2rem;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    color: #007acc;
+  }
+
+  .summary {
+    text-align: center;
+    font-style: italic;
+    margin-bottom: 2rem;
+  }
+
+  .button-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .refresh-button,
+  .download-buttons a {
+    padding: 0.6rem 1.2rem;
+    background-color: #007acc;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .refresh-button:hover,
+  .download-buttons a:hover {
+    background-color: #005f99;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    background-color: white;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+  }
+
+  th, td {
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    text-align: left;
+  }
+
+  th {
+    background-color: #e6f2ff;
+    color: #007acc;
+  }
+
+  .chart-container img {
+    max-width: 100%;
+    margin: 2rem 0;
+    border-radius: 8px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+  }
+
+  .ip-section {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 2px solid #ccc;
+  }
+
+  .ip-section h3 {
+    color: #007acc;
+    margin-bottom: 0.5rem;
+  }
+</style>
+
+</head>
+<body>
+  <h1>Reconnaissance Report</h1>
+  <p id="summary">Loading...</p>
+
+  <div class="button-bar">
+    <button class="refresh-button" onclick="location.reload()">REFRESH REPORT</button>
+    <div class="download-buttons">
+      <a href="/api/download/json" download>Download JSON</a>
+      <a href="/api/download/csv" download>Download CSV</a>
+      <a href="/api/download/pdf" download>Download PDF</a>
+    </div>
+  </div>
+
+  <div id="results"></div>
+
+  <div id="charts">
+    <h2>Ports per Service</h2>
+    <img src="/api/static/port_chart.png" alt="Bar chart">
+
+    <h2>Service Distribution</h2>
+    <img src="/api/static/service_pie.png" alt="Pie chart">
+  </div>
+
+ <script>
+  fetch("/api/report")
+    .then(res => res.json())
+    .then(data => {
+      const summaryEl = document.getElementById("summary");
+      const resultsContainer = document.getElementById("results");
+      const chartsEl = document.getElementById("charts");
+      const downloadsEl = document.querySelector(".download-buttons");
+
+      const scanned = data.meta?.scanned_hosts ?? "N";
+      const alive = data.meta?.alive_hosts ?? 0;
+      const duration = typeof data.meta?.duration === "number"
+        ? data.meta.duration.toFixed(2)
+        : "X";
+
+      const results = data.results || [];
+      const hasResults = results.length > 0;
+
+      if (!hasResults) {
+        summaryEl.textContent = `No active hosts were found. ${scanned} hosts were tested in ${duration} seconds.`;
+        resultsContainer.style.display = "none";
+        chartsEl.style.display = "none";
+        downloadsEl.style.display = "none";
+        return;
+      }
+
+      summaryEl.textContent = `${scanned} hosts scanned in ${duration} seconds. ${alive} alive.`;
+
+      const grouped = {};
+      results.forEach(item => {
+        if (!grouped[item.host]) grouped[item.host] = [];
+        grouped[item.host].push(item);
+      });
+
+      Object.entries(grouped).forEach(([ip, ports]) => {
+        const section = document.createElement("div");
+        section.className = "ip-section";
+
+        const heading = document.createElement("h3");
+        heading.textContent = `Host: ${ip}`;
+        section.appendChild(heading);
+
+        const table = document.createElement("table");
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th>Port</th>
+              <th>Protocol</th>
+              <th>State</th>
+              <th>Service</th>
+              <th>Version</th>
+              <th>Preview</th>
+              <th>Fingerprint</th>
+              <th>HTTP Title</th>
+              <th>Web Server</th>
+              <th>TLS Error</th>
+              <th>SSH Ident</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        `;
+
+        const tbody = table.querySelector("tbody");
+        ports.forEach(p => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${p.port}</td>
+            <td>${p.protocol || "-"}</td>
+            <td>${p.state || "-"}</td>
+            <td>${p.service || "-"}</td>
+            <td>${p.version || "-"}</td>
+            <td>${p.ascii_preview || "-"}</td>
+            <td>${p.fingerprint || "-"}</td>
+            <td>${p.http?.title || "-"}</td>
+            <td>${p.http?.headers?.Server || "-"}</td>
+            <td>${p.tls_cert?.error || "-"}</td>
+            <td>${p.ssh?.ssh_ident || "-"}</td>
+          `;
+          tbody.appendChild(row);
+        });
+
+        section.appendChild(table);
+        resultsContainer.appendChild(section);
+      });
+    })
+    .catch(err => {
+      document.getElementById("summary").textContent = "Error loading report.";
+      console.error(err);
+    });
+</script>
+
+</body>
+</html>

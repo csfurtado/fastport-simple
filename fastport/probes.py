@@ -79,13 +79,41 @@ async def probe_ssh_ident(host: str, port: int = 22, timeout: float = 5.0) -> Di
     try:
         reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
         ident = await asyncio.wait_for(reader.readline(), timeout=timeout)
-        ident_str = ident.decode(errors="ignore").strip()
-        result["ssh_ident"] = ident_str
+        result["ssh_ident"] = ident.decode(errors="ignore").strip()
         writer.close()
         await writer.wait_closed()
     except Exception as e:
         result["error"] = str(e)
     return result
+
+
+# -----------------------------
+# Generic banner probe
+# -----------------------------
+async def generic_banner_probe(host: str, port: int, timeout: float = 3.0) -> Dict[str, Any]:
+    out = {}
+    try:
+        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+        data = await asyncio.wait_for(reader.read(512), timeout=timeout)
+        if data:
+            s = data.decode('latin-1', errors='ignore')
+            out["banner_raw"] = s[:200]
+        writer.close()
+        await writer.wait_closed()
+    except Exception as e:
+        out["error"] = str(e)
+    return out
+
+
+# -----------------------------
+# FTP / SMTP / POP3 / IMAP / Redis / RDP probes
+# -----------------------------
+async def probe_ftp(host: str, port: int = 21): return await generic_banner_probe(host, port)
+async def probe_smtp(host: str, port: int = 25): return await generic_banner_probe(host, port)
+async def probe_pop3(host: str, port: int = 110): return await generic_banner_probe(host, port)
+async def probe_imap(host: str, port: int = 143): return await generic_banner_probe(host, port)
+async def probe_redis(host: str, port: int = 6379): return await generic_banner_probe(host, port)
+async def probe_rdp(host: str, port: int = 3389): return await generic_banner_probe(host, port)
 
 
 # -----------------------------
@@ -167,39 +195,43 @@ def infer_service(port: int, banner: Optional[str], http: Optional[Dict[str, Any
     common_ports = {
         21: "ftp", 22: "ssh", 25: "smtp", 53: "dns", 80: "http",
         110: "pop3", 143: "imap", 443: "https", 3306: "mysql",
-        3389: "rdp", 5432: "postgresql", 8080: "http-proxy", 8443: "https-alt"
+        3389: "rdp", 5432: "postgresql", 6379: "redis",
+        8080: "http-proxy", 8443: "https-alt"
     }
     if port in common_ports:
         service = common_ports[port]
 
-    if ssh and "ssh_ident" in ssh:
-        service = "ssh"
-        parts = ssh["ssh_ident"].split("-")
-        if len(parts) >= 2:
-            version = parts[-1]
+    # Extra inference by banners
+    patterns = {
+        "ftp": r"ftp",
+        "smtp": r"smtp",
+        "pop3": r"pop3",
+        "imap": r"imap",
+        "mysql": r"mysql",
+        "postgres": r"postgres",
+        "redis": r"redis",
+        "rdp": r"rdp",
+        "ssh": r"ssh",
+        "http": r"http|html",
+    }
+    for key, pat in patterns.items():
+        if re.search(pat, banner_lower):
+            service = key
+            break
 
     if http and "headers" in http:
-        hdrs = http["headers"]
-        srv = hdrs.get("Server") or hdrs.get("server")
+        srv = http["headers"].get("Server") or http["headers"].get("server")
         if srv:
             m = re.match(r"([\w\-\.]+)(?:/([\d\.]+))?", srv)
             if m:
                 service = m.group(1).lower()
                 version = m.group(2)
 
-    if not service and banner_lower:
-        if "ssh" in banner_lower:
+    if ssh and "ssh_ident" in ssh:
+        parts = ssh["ssh_ident"].split("-")
+        if len(parts) >= 2:
             service = "ssh"
-        elif "smtp" in banner_lower:
-            service = "smtp"
-        elif "mysql" in banner_lower:
-            service = "mysql"
-        elif "postgres" in banner_lower:
-            service = "postgresql"
-        elif "ftp" in banner_lower:
-            service = "ftp"
-        elif "http" in banner_lower or "html" in banner_lower:
-            service = "http"
+            version = parts[-1]
 
     return {"service": service, "version": version}
 
@@ -219,42 +251,29 @@ async def full_port_probe(host: str, port: int, banner: Optional[bytes] = None) 
     http_res = tls_res = ssh_res = None
 
     if port in (80, 443, 8080, 8443):
-        try:
-            http_res = await probe_http(host, port)
-            result["http"] = http_res
-        except Exception as e:
-            result["http_error"] = str(e)
+        result["http"] = await probe_http(host, port)
 
     if port in (443, 8443):
-        try:
-            tls_res = await probe_tls_cert_async(host, port)
-            result["tls_cert"] = tls_res
-        except Exception as e:
-            result["tls_error"] = str(e)
+        result["tls_cert"] = await probe_tls_cert_async(host, port)
 
     if port == 22:
-        try:
-            ssh_res = await probe_ssh_ident(host, port)
-            result["ssh"] = ssh_res
-        except Exception as e:
-            result["ssh_error"] = str(e)
+        result["ssh"] = await probe_ssh_ident(host, port)
 
     # Database probes
     if port == 3306:
         mysql_info = await probe_mysql_version(host, port)
-        if mysql_info:
-            result["mysql"] = mysql_info
-            if mysql_info.get("mysql_version"):
-                result["service"] = "mysql"
-                result["version"] = mysql_info["mysql_version"]
-
-    if port == 5432:
+        result["mysql"] = mysql_info
+    elif port == 5432:
         pg_info = await probe_postgres_version(host, port)
-        if pg_info:
-            result["postgresql"] = pg_info
-            if pg_info.get("postgres_version"):
-                result["service"] = "postgresql"
-                result["version"] = pg_info["postgres_version"]
+        result["postgresql"] = pg_info
+
+    # Generic service probes
+    probe_map = {
+        21: probe_ftp, 25: probe_smtp, 110: probe_pop3, 143: probe_imap,
+        6379: probe_redis, 3389: probe_rdp,
+    }
+    if port in probe_map:
+        result.update(await probe_map[port](host, port))
 
     inferred = infer_service(port, banner_text, http_res, ssh_res)
     result.update({k: v for k, v in inferred.items() if v and not result.get(k)})

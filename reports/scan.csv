@@ -1,0 +1,13 @@
+timestamp,host,port,protocol,state,service,version,fingerprint,os_guess,banner_preview,http_title,tls_sha256
+2025-11-13T04:46:19.391184,10.0.2.2,23,tcp,open,telnet,,34ae12180fed,,............. ......#......',,
+2025-11-13T04:46:19.391184,10.0.2.2,514,tcp,open,shell,,da39a3ee5e6b,,,,
+2025-11-13T04:46:19.391184,10.0.2.2,513,tcp,open,login,,da39a3ee5e6b,,,,
+2025-11-13T04:46:19.391184,10.0.2.2,512,tcp,open,exec,,a99028464da2,,.Where are you?,,
+2025-11-13T04:46:19.391184,10.0.2.2,53,tcp,open,dns,,abbc90e006c2,,,,
+2025-11-13T04:46:19.391184,10.0.2.2,111,tcp,open,sunrpc,,da39a3ee5e6b,,,,
+2025-11-13T04:46:19.391184,10.0.2.2,139,tcp,open,smb,,da39a3ee5e6b,,,,
+2025-11-13T04:46:19.391184,10.0.2.2,445,tcp,open,smb,,da39a3ee5e6b,,,,
+2025-11-13T04:46:19.391184,10.0.2.2,22,tcp,open,ssh,4.7,c2a76d9364ee,,SSH-2.0-OpenSSH_4.7p1 Debian-8ubuntu1,,
+2025-11-13T04:46:19.391184,10.0.2.2,25,tcp,open,smtp,,23cf8b342ed6,,220 metasploitable.localdomain ESMTP Postfix (Ubuntu),,
+2025-11-13T04:46:19.391184,10.0.2.2,21,tcp,open,ftp,2.3,41ce65b5af19,,220 (vsFTPd 2.3.4),,
+2025-11-13T04:46:19.391184,10.0.2.2,80,tcp,open,http,2.2.8,77b5f8e343a9,,,Metasploitable2 - Linux,

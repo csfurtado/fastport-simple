@@ -1,0 +1,13 @@
+Host,Port,Service,State,Version,Banner
+10.0.2.2,23,telnet,open,,���� ��#��'
+10.0.2.2,514,shell,open,,
+10.0.2.2,513,login,open,,
+10.0.2.2,512,exec,open,,Where are you?
+10.0.2.2,53,dns,open,,
+10.0.2.2,111,sunrpc,open,,
+10.0.2.2,139,smb,open,,
+10.0.2.2,445,smb,open,,
+10.0.2.2,22,ssh,open,4.7,SSH-2.0-OpenSSH_4.7p1 Debian-8ubuntu1
+10.0.2.2,25,smtp,open,,220 metasploitable.localdomain ESMTP Postfix (Ubuntu)
+10.0.2.2,21,ftp,open,2.3,220 (vsFTPd 2.3.4)
+10.0.2.2,80,http,open,2.2.8,

@@ -1,0 +1,6 @@
+fpdf
+flask
+flask-cors
+aiohttp
+matplotlib
+tqdm
